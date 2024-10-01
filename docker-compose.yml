@@ -15,7 +15,7 @@ services:
   frontend:
     build: ./frontend
     volumes:
-      - ./frontend:/app
+      - ./frontend/src:/app/src  # Монтируем только исходный код
     ports:
       - "3000:3000"
     depends_on:
