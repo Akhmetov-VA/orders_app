@@ -73,6 +73,16 @@ def update_order(db: Session, order_id: int, order_update: schemas.OrderCreate):
     return db_order
 
 
+def create_item_work(db: Session, item_work_data: schemas.ItemWorkCreate, item_id: int):
+    db_item_work = models.ItemWork(
+        item_id=item_id, work_id=item_work_data.work_id, price=item_work_data.price
+    )
+    db.add(db_item_work)
+    db.commit()
+    db.refresh(db_item_work)
+    return db_item_work
+
+
 # Создание предмета
 def create_item(db: Session, item: schemas.ItemCreate, order_id: int):
     db_item = models.Item(name=item.name, order_id=order_id)

@@ -24,6 +24,8 @@ target_metadata = Base.metadata
 # Устанавливаем URL базы данных
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
+print(f"DATABASE_URL in env.py: {DATABASE_URL}")
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
