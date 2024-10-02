@@ -1,34 +1,35 @@
 // src/components/Main.js
 
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Login from './Login';
-import Registration from './Registration';
-import Dashboard from './Dashboard';
-import Orders from './Orders';
+import Registration from './Registration'; // Добавлен импорт
 import OrderForm from './OrderForm';
+import OrderList from './OrderList';
 import OrderEdit from './OrderEdit';
-import Profile from './Profile';
-import Works from './Works';
 import PrivateRoute from './PrivateRoute';
+import AdminPanel from './AdminPanel'; // Добавьте импорт
+import Dashboard from './Dashboard';
 
-function Main() {
+
+function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Login />} />
-      <Route path="/register" element={<Registration />} />
-      <Route element={<PrivateRoute />}>
-        <Route path="/dashboard/*" element={<Dashboard />}>
-          <Route path="orders" element={<Orders />} />
-          <Route path="orders/new" element={<OrderForm />} />
-          <Route path="orders/edit/:id" element={<OrderEdit />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="works" element={<Works />} />
-          {/* Добавьте другие маршруты по необходимости */}
+    <Router>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/register" element={<Registration />} />
+        {/* Маршруты, защищенные PrivateRoute */}
+        <Route element={<PrivateRoute />}>
+          <Route path="/dashboard/*" element={<Dashboard />} />
+            <Route path="/orders" element={<OrderList />} />
+            <Route path="/orders/new" element={<OrderForm />} />
+            <Route path="/orders/edit/:id" element={<OrderEdit />} />
+            <Route path="/admin/*" element={<AdminPanel />} />
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </Router>
   );
 }
 
-export default Main;
+export default App;
+

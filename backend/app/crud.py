@@ -155,3 +155,7 @@ def calculate_order_total(db: Session, order_id: int):
     if db_order.is_urgent:
         total_price *= 1.2
     return total_price
+
+
+def get_items(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Item).offset(skip).limit(limit).all()

@@ -197,3 +197,76 @@ def get_item_names(
 ):
     item_names = crud.get_item_names(db)
     return item_names
+
+
+@app.get("/admin/items/", response_model=List[schemas.Item])
+def read_items(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    items = crud.get_items(db, skip=skip, limit=limit)
+    return items
+
+
+# Эндпоинт для создания новой вещи
+@app.post("/admin/items/", response_model=schemas.Item)
+def create_item(
+    items: schemas.ItemCreate,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    for item in items:
+        out = crud.create_item(db=db, item=item)
+    return out
+
+
+# Эндпоинт для обновления вещи
+@app.put("/admin/items/{item_id}", response_model=schemas.Item)
+def update_item(
+    item_id: int,
+    item_update: schemas.ItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    db_item = crud.update_item(db=db, item_id=item_id, item_update=item_update)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Вещь не найдена")
+    return db_item
+
+
+# Эндпоинт для удаления вещи
+@app.delete("/admin/items/{item_id}", response_model=schemas.Item)
+def delete_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    db_item = crud.delete_item(db=db, item_id=item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Вещь не найдена")
+    return db_item
+
+
+# Эндпоинт для получения вещи по ID
+@app.get("/admin/items/{item_id}", response_model=schemas.Item)
+def read_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    db_item = crud.get_item(db, item_id=item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Вещь не найдена")
+    return db_item

@@ -80,12 +80,12 @@ class Item(ItemBase):
         from_attributes = True
 
 
+class ItemUpdate(ItemBase):
+    works: List[ItemWork]
+
+
 class OrderBase(BaseModel):
     is_urgent: bool
-
-
-class OrderCreate(OrderBase):
-    items: List[ItemCreate]
 
 
 class Order(OrderBase):
