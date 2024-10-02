@@ -73,6 +73,16 @@ def update_order(db: Session, order_id: int, order_update: schemas.OrderCreate):
     return db_order
 
 
+def delete_order(db: Session, order_id: int):
+    db_order = get_order(db, order_id)
+    if db_order:
+        db.delete(db_order)
+        db.commit()
+        return db_order
+    else:
+        return None
+
+
 def create_item_work(db: Session, item_work_data: schemas.ItemWorkCreate, item_id: int):
     db_item_work = models.ItemWork(
         item_id=item_id, work_id=item_work_data.work_id, price=item_work_data.price
@@ -93,6 +103,16 @@ def create_item(db: Session, item: schemas.ItemCreate, order_id: int):
     for item_work_data in item.works:
         create_item_work(db, item_work_data, db_item.id)
     return db_item
+
+
+def get_all_orders(db: Session):
+    return db.query(models.Order).all()
+
+
+def get_item_names(db: Session):
+    return [
+        item.name for item in db.query(models.Item).distinct(models.Item.name).all()
+    ]
 
 
 # Получение предмета по ID
@@ -135,3 +155,61 @@ def calculate_order_total(db: Session, order_id: int):
     if db_order.is_urgent:
         total_price *= 1.2
     return total_price
+
+
+# backend/app/crud.py
+
+
+def get_items(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Item).offset(skip).limit(limit).all()
+
+
+def get_item(db: Session, item_id: int):
+    return db.query(models.Item).filter(models.Item.id == item_id).first()
+
+
+def create_item(db: Session, item: schemas.ItemCreate):
+    db_item = models.Item(name=item.name)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    # Создаем связанные работы
+    for work_data in item.works:
+        db_work = models.Work(
+            description=work_data.description,
+            standard_price=work_data.standard_price,
+            item_id=db_item.id,
+        )
+        db.add(db_work)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+def update_item(db: Session, item_id: int, item_update: schemas.ItemUpdate):
+    db_item = get_item(db, item_id)
+    if not db_item:
+        return None
+    db_item.name = item_update.name
+    # Обновляем работы
+    db.query(models.Work).filter(models.Work.item_id == item_id).delete()
+    for work_data in item_update.works:
+        db_work = models.Work(
+            description=work_data.description,
+            standard_price=work_data.standard_price,
+            item_id=db_item.id,
+        )
+        db.add(db_work)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+def delete_item(db: Session, item_id: int):
+    db_item = get_item(db, item_id)
+    if db_item:
+        db.delete(db_item)
+        db.commit()
+        return db_item
+    else:
+        return None

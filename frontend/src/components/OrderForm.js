@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import API from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
-function OrderForm({ history }) {
+function OrderForm() {
   const [isUrgent, setIsUrgent] = useState(false);
   const [items, setItems] = useState([
     {
@@ -17,20 +18,43 @@ function OrderForm({ history }) {
     },
   ]);
   const [worksList, setWorksList] = useState([]);
+  const [itemNamesList, setItemNamesList] = useState([]); // Список названий вещей из БД
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Получаем список доступных работ из бэкенда
-    API.get('/works/')
-      .then((response) => {
-        setWorksList(response.data);
-      })
-      .catch((error) => {
-        console.error('Ошибка при загрузке работ', error);
-      });
+    // Получаем список доступных работ и названий вещей из бэкенда
+    const fetchData = async () => {
+      try {
+        const worksResponse = await API.get('/works/');
+        setWorksList(worksResponse.data);
+
+        // Предположим, что есть эндпоинт /items/names/ для получения названий вещей
+        const itemsResponse = await API.get('/items/names/');
+        setItemNamesList(itemsResponse.data);
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Ошибка при загрузке данных', error);
+        // Используем дефолтные значения, если загрузка не удалась
+        setWorksList([
+          { id: 1, description: 'Стирка' },
+          { id: 2, description: 'Химчистка' },
+          // Добавьте другие работы
+        ]);
+        setItemNamesList(['Рубашка', 'Костюм', 'Платье']);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const handleAddItem = () => {
-    setItems([...items, { name: '', works: [{ work_id: '', price: '' }] }]);
+    setItems([
+      ...items,
+      { name: '', works: [{ work_id: '', price: '' }] },
+    ]);
   };
 
   const handleAddWork = (itemIndex) => {
@@ -51,25 +75,21 @@ function OrderForm({ history }) {
     setItems(newItems);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     // Проверка заполнения полей
     for (let i = 0; i < items.length; i++) {
       if (!items[i].name) {
-        alert(`Введите название для вещи ${i + 1}`);
+        alert(`Введите или выберите название для вещи ${i + 1}`);
         return;
       }
       for (let j = 0; j < items[i].works.length; j++) {
         if (!items[i].works[j].work_id) {
-          alert(
-            `Выберите работу для вещи ${i + 1}, работа ${j + 1}`
-          );
+          alert(`Выберите работу для вещи ${i + 1}, работа ${j + 1}`);
           return;
         }
         if (!items[i].works[j].price) {
-          alert(
-            `Введите цену для вещи ${i + 1}, работа ${j + 1}`
-          );
+          alert(`Введите цену для вещи ${i + 1}, работа ${j + 1}`);
           return;
         }
       }
@@ -87,93 +107,129 @@ function OrderForm({ history }) {
       })),
     };
 
-    // Отправка данных на бэкенд
-    API.post('/orders/', orderData)
-      .then((response) => {
-        history.push('/orders');
-      })
-      .catch((error) => {
-        console.error('Ошибка при создании заказа', error);
-      });
+    try {
+      // Отправка данных на бэкенд
+      await API.post('/orders/', orderData);
+      navigate('/dashboard/orders');
+    } catch (error) {
+      console.error('Ошибка при создании заказа', error);
+      alert('Ошибка при создании заказа');
+    }
   };
 
+  if (loading) {
+    return <div>Загрузка...</div>;
+  }
+
   return (
-    <div>
+    <div className="container mt-5">
       <h2>Создать заказ</h2>
       <form onSubmit={handleSubmit}>
-        <div>
-          <label>
-            Срочно:
-            <input
-              type="checkbox"
-              checked={isUrgent}
-              onChange={(e) => setIsUrgent(e.target.checked)}
-            />
+        <div className="form-check mb-3">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            checked={isUrgent}
+            onChange={(e) => setIsUrgent(e.target.checked)}
+            id="urgentCheck"
+          />
+          <label className="form-check-label" htmlFor="urgentCheck">
+            Срочный заказ
           </label>
         </div>
         {items.map((item, itemIndex) => (
-          <div key={itemIndex}>
-            <h3>Вещь {itemIndex + 1}</h3>
-            <div>
-              <label>Название вещи:</label>
-              <input
-                type="text"
-                value={item.name}
-                onChange={(e) =>
-                  handleItemChange(itemIndex, 'name', e.target.value)
-                }
-              />
-            </div>
-            {item.works.map((work, workIndex) => (
-              <div key={workIndex}>
-                <h4>Работа {workIndex + 1}</h4>
-                <div>
-                  <label>Работа:</label>
-                  <select
-                    value={work.work_id}
-                    onChange={(e) =>
-                      handleWorkChange(
-                        itemIndex,
-                        workIndex,
-                        'work_id',
-                        e.target.value
-                      )
-                    }
-                  >
-                    <option value="">Выберите работу</option>
-                    {worksList.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.description}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Цена:</label>
-                  <input
-                    type="number"
-                    value={work.price}
-                    onChange={(e) =>
-                      handleWorkChange(
-                        itemIndex,
-                        workIndex,
-                        'price',
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
+          <div key={itemIndex} className="card mb-3">
+            <div className="card-body">
+              <h3>Вещь {itemIndex + 1}</h3>
+              <div className="mb-3">
+                <label className="form-label">Название вещи:</label>
+                <select
+                  className="form-select mb-2"
+                  value={item.name}
+                  onChange={(e) =>
+                    handleItemChange(itemIndex, 'name', e.target.value)
+                  }
+                >
+                  <option value="">Выберите вещь</option>
+                  {itemNamesList.map((name, idx) => (
+                    <option key={idx} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Или введите вручную"
+                  value={item.name}
+                  onChange={(e) =>
+                    handleItemChange(itemIndex, 'name', e.target.value)
+                  }
+                />
               </div>
-            ))}
-            <button type="button" onClick={() => handleAddWork(itemIndex)}>
-              Добавить работу
-            </button>
+              {item.works.map((work, workIndex) => (
+                <div key={workIndex} className="mb-3">
+                  <h4>Работа {workIndex + 1}</h4>
+                  <div className="mb-2">
+                    <label className="form-label">Работа:</label>
+                    <select
+                      className="form-select"
+                      value={work.work_id}
+                      onChange={(e) =>
+                        handleWorkChange(
+                          itemIndex,
+                          workIndex,
+                          'work_id',
+                          e.target.value
+                        )
+                      }
+                    >
+                      <option value="">Выберите работу</option>
+                      {worksList.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Цена:</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={work.price}
+                      onChange={(e) =>
+                        handleWorkChange(
+                          itemIndex,
+                          workIndex,
+                          'price',
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => handleAddWork(itemIndex)}
+              >
+                Добавить работу
+              </button>
+            </div>
           </div>
         ))}
-        <button type="button" onClick={handleAddItem}>
+        <button
+          type="button"
+          className="btn btn-secondary me-2"
+          onClick={handleAddItem}
+        >
           Добавить вещь
         </button>
-        <button type="submit">Создать заказ</button>
+        <button type="submit" className="btn btn-primary">
+          Создать заказ
+        </button>
       </form>
     </div>
   );

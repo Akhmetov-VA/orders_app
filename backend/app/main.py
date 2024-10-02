@@ -6,6 +6,7 @@ from typing import List  # Добавлено
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import auth, crud, models, schemas
@@ -51,11 +52,26 @@ async def login_for_access_token(
 # Эндпоинт для регистрации пользователя
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # Проверяем, существует ли пользователь с таким именем
     db_user = crud.get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Имя пользователя уже занято")
+
+    # Проверяем, существует ли пользователь с таким email
+    db_user = crud.get_user_by_email(db, email=user.email)
+    if db_user:
+        raise HTTPException(
+            status_code=400, detail="Электронная почта уже используется"
+        )
+
     hashed_password = auth.get_password_hash(user.password)
-    created_user = crud.create_user(db=db, user=user, hashed_password=hashed_password)
+    try:
+        created_user = crud.create_user(
+            db=db, user=user, hashed_password=hashed_password
+        )
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка сохранения пользователя")
     return schemas.User.model_validate(created_user)
 
 
@@ -66,27 +82,50 @@ async def read_users_me(current_user: schemas.User = Depends(get_current_user)):
 
 
 # Эндпоинт для создания заказа
-@app.get("/orders/", response_model=List[schemas.Order])
-def read_orders(
-    skip: int = 0,
-    limit: int = 100,
+@app.post("/orders/", response_model=schemas.Order)
+def create_order(
+    order: schemas.OrderCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: schemas.User = Depends(get_current_user),
 ):
-    orders = crud.get_orders_by_user(db, user_id=current_user.id)
-    return [schemas.Order.model_validate(order) for order in orders]
+    return crud.create_order(db=db, order=order, user_id=current_user.id)
 
 
 # Эндпоинт для получения заказов текущего пользователя
 @app.get("/orders/", response_model=List[schemas.Order])
-def read_orders(
-    skip: int = 0,
-    limit: int = 100,
+def read_user_orders(
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user),
 ):
     orders = crud.get_orders_by_user(db, user_id=current_user.id)
     return orders
+
+
+# Эндпоинт для получения всех заказов (только для администратора)
+@app.get("/orders/all", response_model=List[schemas.Order])
+def read_all_orders(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    orders = crud.get_all_orders(db)
+    return orders
+
+
+# Эндпоинт для получения информации о конкретном заказе
+@app.get("/orders/{order_id}", response_model=schemas.Order)
+def read_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    db_order = crud.get_order(db, order_id=order_id)
+    if db_order is None:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    if db_order.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому заказу")
+    return db_order
 
 
 # Эндпоинт для обновления заказа
@@ -103,6 +142,21 @@ def update_order(
     if db_order.user_id != current_user.id:
         raise HTTPException(status_code=400, detail="Нет доступа к этому заказу")
     return crud.update_order(db=db, order_id=order_id, order_update=order)
+
+
+# Эндпоинт для удаления заказа
+@app.delete("/orders/{order_id}", response_model=schemas.Order)
+def delete_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    db_order = crud.get_order(db, order_id=order_id)
+    if db_order is None:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    if db_order.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому заказу")
+    return crud.delete_order(db=db, order_id=order_id)
 
 
 # Эндпоинты для работ
@@ -133,3 +187,13 @@ def read_users(
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     users = db.query(models.User).all()
     return users
+
+
+# Эндпоинт для получения списка названий вещей
+@app.get("/items/names/", response_model=List[str])
+def get_item_names(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    item_names = crud.get_item_names(db)
+    return item_names

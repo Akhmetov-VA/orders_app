@@ -1,9 +1,26 @@
 # backend/app/schemas.py
 
 import datetime
+
+# backend/app/schemas.py
 from typing import List, Optional
 
 from pydantic import BaseModel
+
+
+class ItemWorkCreate(BaseModel):
+    work_id: int
+    price: float
+
+
+class ItemCreate(BaseModel):
+    name: str
+    works: List[ItemWorkCreate]
+
+
+class OrderCreate(BaseModel):
+    is_urgent: bool
+    items: List[ItemCreate]
 
 
 # Схема для токена
