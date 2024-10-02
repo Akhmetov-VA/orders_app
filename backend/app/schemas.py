@@ -1,37 +1,34 @@
 # backend/app/schemas.py
 
 import datetime
-
-# backend/app/schemas.py
 from typing import List, Optional
 
 from pydantic import BaseModel
 
 
-class ItemWorkCreate(BaseModel):
-    work_id: int
-    price: float
-
-
-class ItemCreate(BaseModel):
-    name: str
-    works: List[ItemWorkCreate]
-
-
-class OrderCreate(BaseModel):
-    is_urgent: bool
-    items: List[ItemCreate]
-
-
-# Схема для токена
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 
+class UserBase(BaseModel):
+    username: str
+    email: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class User(UserBase):
+    id: int
+    is_admin: bool
+
+    class Config:
+        orm_mode = True
+
+
 class WorkBase(BaseModel):
-    type_id: int
-    category_id: int
     description: str
     standard_price: float
 
@@ -44,7 +41,7 @@ class Work(WorkBase):
     id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ItemWorkBase(BaseModel):
@@ -57,11 +54,11 @@ class ItemWorkCreate(ItemWorkBase):
 
 
 class ItemWork(ItemWorkBase):
-    item_id: int
+    id: int
     work: Work
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ItemBase(BaseModel):
@@ -77,40 +74,31 @@ class Item(ItemBase):
     works: List[ItemWork]
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ItemUpdate(ItemBase):
-    works: List[ItemWork]
+    works: List[ItemWorkCreate]
 
 
 class OrderBase(BaseModel):
     is_urgent: bool
+    receiver_id: Optional[int] = None
+    executor_id: Optional[int] = None
+
+
+class OrderCreate(OrderBase):
+    items: List[ItemCreate]
 
 
 class Order(OrderBase):
     id: int
     date_created: datetime.datetime
-    total_price: float
+    total_price: Optional[float] = None
     items: List[Item]
+    owner: User
+    receiver: Optional[User] = None
+    executor: Optional[User] = None
 
     class Config:
-        from_attributes = True
-
-
-class UserBase(BaseModel):
-    username: str
-    email: str
-
-
-class UserCreate(UserBase):
-    password: str
-
-
-class User(UserBase):
-    id: int
-    is_admin: bool  # Новое поле
-    orders: List[Order] = []
-
-    class Config:
-        from_attributes = True
+        orm_mode = True

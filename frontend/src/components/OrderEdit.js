@@ -3,95 +3,61 @@
 import React, { useState, useEffect } from 'react';
 import API from '../services/api';
 import { useParams, useNavigate } from 'react-router-dom';
+import { DataGrid } from '@mui/x-data-grid';
+import { TextField, Checkbox, FormControlLabel, Button } from '@mui/material';
 
 function OrderEdit() {
   const { id: orderId } = useParams();
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [items, setItems] = useState([]);
+  const [order, setOrder] = useState(null);
   const [worksList, setWorksList] = useState([]);
-  const [itemNamesList, setItemNamesList] = useState([]); // Список названий вещей
+  const [itemNamesList, setItemNamesList] = useState([]);
+  const [usersList, setUsersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Получаем данные заказа
-        const orderResponse = await API.get(`/orders/${orderId}`);
-        const order = orderResponse.data;
-        setIsUrgent(order.is_urgent);
-        setItems(order.items);
-
-        // Получаем список доступных работ
-        const worksResponse = await API.get('/works/');
-        setWorksList(worksResponse.data);
-
-        // Получаем список названий вещей
-        const itemsResponse = await API.get('/items/names/');
-        setItemNamesList(itemsResponse.data);
-
-        setLoading(false);
-      } catch (error) {
-        console.error('Ошибка при загрузке данных', error);
-        alert('Ошибка при загрузке данных');
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [orderId]);
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
+  const fetchData = async () => {
+    try {
+      const [orderResponse, worksResponse, itemsResponse, usersResponse] = await Promise.all([
+        API.get(`/orders/${orderId}`),
+        API.get('/works/'),
+        API.get('/items/names/'),
+        API.get('/users/'),
+      ]);
+
+      setOrder(orderResponse.data);
+      setWorksList(worksResponse.data);
+      setItemNamesList(itemsResponse.data);
+      setUsersList(usersResponse.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Ошибка при загрузке данных', error);
+      alert('Ошибка при загрузке данных');
+      setLoading(false);
+    }
   };
 
-  const handleWorkChange = (itemIndex, workIndex, field, value) => {
-    const newItems = [...items];
-    newItems[itemIndex].works[workIndex][field] = value;
-    setItems(newItems);
+  const handleOrderChange = (field, value) => {
+    setOrder((prevOrder) => ({
+      ...prevOrder,
+      [field]: value,
+    }));
   };
 
-  const handleAddWork = (itemIndex) => {
-    const newItems = [...items];
-    newItems[itemIndex].works.push({ work_id: '', price: '' });
-    setItems(newItems);
+  const handleItemUpdate = (items) => {
+    setOrder((prevOrder) => ({
+      ...prevOrder,
+      items,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Проверка заполнения полей
-    for (let i = 0; i < items.length; i++) {
-      if (!items[i].name) {
-        alert(`Введите или выберите название для вещи ${i + 1}`);
-        return;
-      }
-      for (let j = 0; j < items[i].works.length; j++) {
-        if (!items[i].works[j].work_id) {
-          alert(`Выберите работу для вещи ${i + 1}, работа ${j + 1}`);
-          return;
-        }
-        if (!items[i].works[j].price) {
-          alert(`Введите цену для вещи ${i + 1}, работа ${j + 1}`);
-          return;
-        }
-      }
-    }
-
-    const orderData = {
-      is_urgent: isUrgent,
-      items: items.map((item) => ({
-        name: item.name,
-        works: item.works.map((work) => ({
-          work_id: parseInt(work.work_id),
-          price: parseFloat(work.price),
-        })),
-      })),
-    };
-
     try {
-      await API.put(`/orders/${orderId}`, orderData);
+      await API.put(`/orders/${orderId}`, order);
       navigate('/dashboard/orders');
     } catch (error) {
       console.error('Ошибка при обновлении заказа', error);
@@ -99,7 +65,7 @@ function OrderEdit() {
     }
   };
 
-  if (loading) {
+  if (loading || !order) {
     return <div>Загрузка...</div>;
   }
 
@@ -107,107 +73,201 @@ function OrderEdit() {
     <div className="container mt-5">
       <h2>Редактировать заказ #{orderId}</h2>
       <form onSubmit={handleSubmit}>
-        <div className="form-check mb-3">
-          <input
-            className="form-check-input"
-            type="checkbox"
-            checked={isUrgent}
-            onChange={(e) => setIsUrgent(e.target.checked)}
-            id="urgentCheck"
-          />
-          <label className="form-check-label" htmlFor="urgentCheck">
-            Срочный заказ
-          </label>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={order.is_urgent}
+              onChange={(e) => handleOrderChange('is_urgent', e.target.checked)}
+            />
+          }
+          label="Срочный заказ"
+        />
+        {/* Поля для выбора приемщика и исполнителя */}
+        <div className="mb-3">
+          <label className="form-label">Приемщик:</label>
+          <select
+            className="form-select"
+            value={order.receiver_id || ''}
+            onChange={(e) => handleOrderChange('receiver_id', e.target.value || null)}
+          >
+            <option value="">Не назначен</option>
+            {usersList.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.username}
+              </option>
+            ))}
+          </select>
         </div>
-        {items.map((item, itemIndex) => (
-          <div key={itemIndex} className="card mb-3">
-            <div className="card-body">
-              <h3>Вещь {itemIndex + 1}</h3>
-              <div className="mb-3">
-                <label className="form-label">Название вещи:</label>
-                <select
-                  className="form-select mb-2"
-                  value={item.name}
-                  onChange={(e) =>
-                    handleItemChange(itemIndex, 'name', e.target.value)
-                  }
-                >
-                  <option value="">Выберите вещь</option>
-                  {itemNamesList.map((name, idx) => (
-                    <option key={idx} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Или введите вручную"
-                  value={item.name}
-                  onChange={(e) =>
-                    handleItemChange(itemIndex, 'name', e.target.value)
-                  }
-                />
-              </div>
-              {item.works.map((work, workIndex) => (
-                <div key={workIndex} className="mb-3">
-                  <h4>Работа {workIndex + 1}</h4>
-                  <div className="mb-2">
-                    <label className="form-label">Работа:</label>
-                    <select
-                      className="form-select"
-                      value={work.work_id}
-                      onChange={(e) =>
-                        handleWorkChange(
-                          itemIndex,
-                          workIndex,
-                          'work_id',
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value="">Выберите работу</option>
-                      {worksList.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.description}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Цена:</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={work.price}
-                      onChange={(e) =>
-                        handleWorkChange(
-                          itemIndex,
-                          workIndex,
-                          'price',
-                          e.target.value
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => handleAddWork(itemIndex)}
-              >
-                Добавить работу
-              </button>
-            </div>
-          </div>
-        ))}
-        <button type="submit" className="btn btn-primary">
+        <div className="mb-3">
+          <label className="form-label">Исполнитель:</label>
+          <select
+            className="form-select"
+            value={order.executor_id || ''}
+            onChange={(e) => handleOrderChange('executor_id', e.target.value || null)}
+          >
+            <option value="">Не назначен</option>
+            {usersList.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.username}
+              </option>
+            ))}
+          </select>
+        </div>
+        {/* Таблица вещей */}
+        <h3>Вещи</h3>
+        <EditableItemsTable
+          items={order.items}
+          setItems={handleItemUpdate}
+          worksList={worksList}
+          itemNamesList={itemNamesList}
+        />
+        <Button type="submit" variant="contained" color="primary">
           Сохранить изменения
-        </button>
+        </Button>
       </form>
     </div>
   );
 }
 
 export default OrderEdit;
+
+// Компонент для редактирования вещей и работ
+function EditableItemsTable({ items, setItems, worksList, itemNamesList }) {
+  const [itemRows, setItemRows] = useState([]);
+
+  useEffect(() => {
+    setItemRows(items.map((item, index) => ({ id: index, ...item })));
+  }, [items]);
+
+  const handleItemRowUpdate = (newRow) => {
+    const updatedItems = [...itemRows];
+    const index = updatedItems.findIndex((item) => item.id === newRow.id);
+    updatedItems[index] = newRow;
+    setItemRows(updatedItems);
+    setItems(updatedItems.map(({ id, ...rest }) => rest));
+  };
+
+  const handleAddItem = () => {
+    const newItem = {
+      id: itemRows.length,
+      name: '',
+      works: [],
+    };
+    const updatedItems = [...itemRows, newItem];
+    setItemRows(updatedItems);
+    setItems(updatedItems.map(({ id, ...rest }) => rest));
+  };
+
+  return (
+    <div>
+      <Button variant="outlined" onClick={handleAddItem} className="mb-3">
+        Добавить вещь
+      </Button>
+      {itemRows.map((item) => (
+        <div key={item.id} className="mb-4">
+          <TextField
+            label="Название вещи"
+            value={item.name}
+            onChange={(e) => {
+              const newItem = { ...item, name: e.target.value };
+              handleItemRowUpdate(newItem);
+            }}
+            fullWidth
+            className="mb-2"
+          />
+          <EditableWorksTable
+            works={item.works}
+            setWorks={(newWorks) => {
+              const newItem = { ...item, works: newWorks };
+              handleItemRowUpdate(newItem);
+            }}
+            worksList={worksList}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EditableWorksTable({ works, setWorks, worksList }) {
+  const [workRows, setWorkRows] = useState([]);
+
+  useEffect(() => {
+    setWorkRows(works.map((work, index) => ({ id: index, ...work })));
+  }, [works]);
+
+  const handleWorkRowUpdate = (newRow) => {
+    const updatedWorks = [...workRows];
+    const index = updatedWorks.findIndex((work) => work.id === newRow.id);
+    updatedWorks[index] = newRow;
+    setWorkRows(updatedWorks);
+    setWorks(updatedWorks.map(({ id, ...rest }) => rest));
+  };
+
+  const handleAddWork = () => {
+    const newWork = {
+      id: workRows.length,
+      work_id: '',
+      price: '',
+    };
+    const updatedWorks = [...workRows, newWork];
+    setWorkRows(updatedWorks);
+    setWorks(updatedWorks.map(({ id, ...rest }) => rest));
+  };
+
+  return (
+    <div>
+      <Button variant="outlined" onClick={handleAddWork} className="mb-2">
+        Добавить работу
+      </Button>
+      {workRows.map((work) => (
+        <div key={work.id} className="mb-2">
+          <div className="row">
+            <div className="col-md-6">
+              <select
+                className="form-select"
+                value={work.work_id || ''}
+                onChange={(e) => {
+                  const newWork = { ...work, work_id: parseInt(e.target.value) };
+                  handleWorkRowUpdate(newWork);
+                }}
+              >
+                <option value="">Выберите работу</option>
+                {worksList.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-4">
+              <TextField
+                label="Цена"
+                type="number"
+                value={work.price}
+                onChange={(e) => {
+                  const newWork = { ...work, price: e.target.value };
+                  handleWorkRowUpdate(newWork);
+                }}
+                fullWidth
+              />
+            </div>
+            <div className="col-md-2">
+              <Button
+                variant="text"
+                color="error"
+                onClick={() => {
+                  const updatedWorks = workRows.filter((w) => w.id !== work.id);
+                  setWorkRows(updatedWorks);
+                  setWorks(updatedWorks.map(({ id, ...rest }) => rest));
+                }}
+              >
+                Удалить
+              </Button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

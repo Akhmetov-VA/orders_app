@@ -3,9 +3,9 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AdminNavbar from './AdminNavbar';
-import ItemList from './admin/ItemList';
-import ItemCreate from './admin/ItemCreate';
-import ItemEdit from './admin/ItemEdit';
+import ItemList from './ItemList';
+import ItemCreate from './ItemCreate';
+import ItemEdit from './ItemEdit';
 
 function AdminPanel() {
   const currentUser = JSON.parse(localStorage.getItem('user'));

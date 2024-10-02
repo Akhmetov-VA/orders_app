@@ -12,6 +12,8 @@ function Navbar() {
     navigate('/');
   };
 
+  const currentUser = JSON.parse(localStorage.getItem('user'));
+
   return (
     <nav className="navbar navbar-expand-lg navbar-light bg-light">
       <div className="container-fluid">
@@ -31,21 +33,20 @@ function Navbar() {
         </button>
         <div className="collapse navbar-collapse" id="navbarNav">
           <ul className="navbar-nav">
+            {/* Общие ссылки */}
             <li className="nav-item">
               <NavLink className="nav-link" to="/dashboard/orders">
                 Заказы
               </NavLink>
             </li>
-            <li className="nav-item">
-              <NavLink className="nav-link" to="/dashboard/works">
-                Работы
-              </NavLink>
-            </li>
-            <li className="nav-item">
-              <NavLink className="nav-link" to="/dashboard/profile">
-                Профиль
-              </NavLink>
-            </li>
+            {/* Администраторские ссылки */}
+            {currentUser && currentUser.is_admin && (
+              <li className="nav-item">
+                <NavLink className="nav-link" to="/admin/items">
+                  Админ-панель
+                </NavLink>
+              </li>
+            )}
             <li className="nav-item">
               <button className="nav-link btn btn-link" onClick={handleLogout}>
                 Выйти

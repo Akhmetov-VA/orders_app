@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
-import { Link } from 'react-router-dom';
+import { DataGrid } from '@mui/x-data-grid';
+import { useNavigate } from 'react-router-dom';
 
 function ItemList() {
   const [items, setItems] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     API.get('/admin/items/')
@@ -17,51 +19,63 @@ function ItemList() {
       });
   }, []);
 
+  const columns = [
+    { field: 'id', headerName: 'ID', width: 70, editable: false },
+    {
+      field: 'name',
+      headerName: 'Название',
+      width: 200,
+      editable: true,
+    },
+  ];
+
+  const processRowUpdate = async (newRow) => {
+    try {
+      await API.put(`/admin/items/${newRow.id}`, newRow);
+      return newRow;
+    } catch (error) {
+      console.error('Ошибка при обновлении вещи', error);
+      return items.find((item) => item.id === newRow.id);
+    }
+  };
+
+  const handleRowDelete = async (id) => {
+    try {
+      await API.delete(`/admin/items/${id}`);
+      setItems(items.filter((item) => item.id !== id));
+    } catch (error) {
+      console.error('Ошибка при удалении вещи', error);
+    }
+  };
+
   return (
     <div>
       <h2>Список вещей</h2>
-      <Link to="/admin/items/new" className="btn btn-primary mb-3">
+      <button
+        className="btn btn-primary mb-3"
+        onClick={() => navigate('/admin/items/new')}
+      >
         Добавить новую вещь
-      </Link>
-      <table className="table table-striped">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Название</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.id}</td>
-              <td>{item.name}</td>
-              <td>
-                <Link
-                  to={`/admin/items/edit/${item.id}`}
-                  className="btn btn-sm btn-secondary me-2"
-                >
-                  Редактировать
-                </Link>
-                <button
-                  className="btn btn-sm btn-danger"
-                  onClick={() => {
-                    API.delete(`/admin/items/${item.id}`)
-                      .then(() => {
-                        setItems(items.filter((i) => i.id !== item.id));
-                      })
-                      .catch((error) => {
-                        console.error('Ошибка при удалении вещи', error);
-                      });
-                  }}
-                >
-                  Удалить
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      </button>
+      <div style={{ height: 500, width: '100%' }}>
+        <DataGrid
+          rows={items}
+          columns={columns}
+          pageSize={10}
+          rowsPerPageOptions={[10]}
+          experimentalFeatures={{ newEditingApi: true }}
+          processRowUpdate={processRowUpdate}
+          onRowDoubleClick={(params) => navigate(`/admin/items/edit/${params.id}`)}
+          components={{
+            Toolbar: () => (
+              <div>
+                {/* Добавьте дополнительные элементы управления, если необходимо */}
+              </div>
+            ),
+          }}
+          onRowDelete={(params) => handleRowDelete(params.id)}
+        />
+      </div>
     </div>
   );
 }

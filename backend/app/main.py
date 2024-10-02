@@ -1,7 +1,7 @@
 # backend/app/main.py
 
-from datetime import timedelta  # Добавлено
-from typing import List  # Добавлено
+from datetime import timedelta
+from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,8 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import auth, crud, models, schemas
-from .auth import get_current_user, oauth2_scheme
-from .database import SessionLocal, engine
+from .auth import get_current_user
 from .dependencies import get_db
 
 app = FastAPI()
@@ -56,14 +55,12 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = crud.get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Имя пользователя уже занято")
-
     # Проверяем, существует ли пользователь с таким email
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(
             status_code=400, detail="Электронная почта уже используется"
         )
-
     hashed_password = auth.get_password_hash(user.password)
     try:
         created_user = crud.create_user(
@@ -72,13 +69,25 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка сохранения пользователя")
-    return schemas.User.model_validate(created_user)
+    return created_user
 
 
 # Эндпоинт для получения информации о текущем пользователе
 @app.get("/users/me/", response_model=schemas.User)
 async def read_users_me(current_user: schemas.User = Depends(get_current_user)):
     return current_user
+
+
+# Эндпоинт для получения списка пользователей (только для админа)
+@app.get("/users/", response_model=List[schemas.User])
+def read_users(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    users = crud.get_users(db)
+    return users
 
 
 # Эндпоинт для создания заказа
@@ -132,16 +141,21 @@ def read_order(
 @app.put("/orders/{order_id}", response_model=schemas.Order)
 def update_order(
     order_id: int,
-    order: schemas.OrderCreate,
+    order_update: schemas.OrderCreate,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user),
 ):
     db_order = crud.get_order(db, order_id=order_id)
     if not db_order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
-    if db_order.user_id != current_user.id:
-        raise HTTPException(status_code=400, detail="Нет доступа к этому заказу")
-    return crud.update_order(db=db, order_id=order_id, order_update=order)
+    if db_order.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому заказу")
+    updated_order = crud.update_order(
+        db=db, order_id=order_id, order_update=order_update
+    )
+    if not updated_order:
+        raise HTTPException(status_code=400, detail="Ошибка при обновлении заказа")
+    return updated_order
 
 
 # Эндпоинт для удаления заказа
@@ -159,36 +173,6 @@ def delete_order(
     return crud.delete_order(db=db, order_id=order_id)
 
 
-# Эндпоинты для работ
-@app.get("/works/", response_model=List[schemas.Work])
-def read_works(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    works = crud.get_works(db, skip=skip, limit=limit)
-    return works
-
-
-@app.post("/works/", response_model=schemas.Work)
-def create_work(
-    work: schemas.WorkCreate,
-    db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(get_current_user),
-):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    return crud.create_work(db=db, work=work)
-
-
-# Эндпоинт для получения списка пользователей (только для админа)
-@app.get("/users/", response_model=List[schemas.User])
-def read_users(
-    db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(get_current_user),
-):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    users = db.query(models.User).all()
-    return users
-
-
 # Эндпоинт для получения списка названий вещей
 @app.get("/items/names/", response_model=List[str])
 def get_item_names(
@@ -199,12 +183,13 @@ def get_item_names(
     return item_names
 
 
+# Админские эндпоинты для управления вещами
 @app.get("/admin/items/", response_model=List[schemas.Item])
 def read_items(
-    skip: int = 0,
-    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100,
 ):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
@@ -212,21 +197,17 @@ def read_items(
     return items
 
 
-# Эндпоинт для создания новой вещи
 @app.post("/admin/items/", response_model=schemas.Item)
 def create_item(
-    items: schemas.ItemCreate,
+    item: schemas.ItemCreate,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user),
 ):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
-    for item in items:
-        out = crud.create_item(db=db, item=item)
-    return out
+    return crud.create_admin_item(db=db, item=item)
 
 
-# Эндпоинт для обновления вещи
 @app.put("/admin/items/{item_id}", response_model=schemas.Item)
 def update_item(
     item_id: int,
@@ -236,13 +217,14 @@ def update_item(
 ):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
-    db_item = crud.update_item(db=db, item_id=item_id, item_update=item_update)
-    if not db_item:
+    updated_item = crud.update_admin_item(
+        db=db, item_id=item_id, item_update=item_update
+    )
+    if not updated_item:
         raise HTTPException(status_code=404, detail="Вещь не найдена")
-    return db_item
+    return updated_item
 
 
-# Эндпоинт для удаления вещи
 @app.delete("/admin/items/{item_id}", response_model=schemas.Item)
 def delete_item(
     item_id: int,
@@ -251,13 +233,12 @@ def delete_item(
 ):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
-    db_item = crud.delete_item(db=db, item_id=item_id)
-    if not db_item:
+    deleted_item = crud.delete_admin_item(db=db, item_id=item_id)
+    if not deleted_item:
         raise HTTPException(status_code=404, detail="Вещь не найдена")
-    return db_item
+    return deleted_item
 
 
-# Эндпоинт для получения вещи по ID
 @app.get("/admin/items/{item_id}", response_model=schemas.Item)
 def read_item(
     item_id: int,
@@ -270,3 +251,18 @@ def read_item(
     if not db_item:
         raise HTTPException(status_code=404, detail="Вещь не найдена")
     return db_item
+
+
+# Эндпоинт для получения списка работ
+@app.get("/works/", response_model=List[schemas.Work])
+def read_works(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user),
+):
+    works = crud.get_works(db, skip=skip, limit=limit)
+    return works
+
+
+# Дополнительные эндпоинты по необходимости...
