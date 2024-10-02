@@ -8,7 +8,7 @@ until pg_isready -h db -p 5432; do
 done
 
 # Запускаем миграции (если используете Alembic)
-# alembic upgrade head
+alembic upgrade head
 
 # Создаём администратора
 python -m app.create_admin
